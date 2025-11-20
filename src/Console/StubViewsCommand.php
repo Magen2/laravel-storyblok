@@ -121,9 +121,11 @@ class StubViewsCommand extends Command
 			switch ($field['type']) {
 				case 'options':
 				case 'bloks':
-					$body .= "\t" . '@foreach ($block->' . $name . ' as $childBlock)' . "\n";
-					$body .= "\t\t" . '{{ $childBlock->render() }}' . "\n";
-					$body .= "\t" . '@endforeach' . "\n";
+					$body .= "\t" . '@if ($block->' . $name . ')' . "\n";
+					$body .= "\t\t" . '@foreach ($block->' . $name . ' as $childBlock)' . "\n";
+					$body .= "\t\t\t" . '{{ $childBlock->render() }}' . "\n";
+					$body .= "\t\t" . '@endforeach' . "\n";
+					$body .= "\t" . '@endif' . "\n";
 					break;
 				case 'datetime':
 					$body .= "\t" . '<time datetime="{{ $block->' . $name . '->content()->toIso8601String() }}">{{ $block->' . $name . ' }}</time>' . "\n";
@@ -150,7 +152,7 @@ class StubViewsCommand extends Command
 					break;
 				case 'image':
 					$body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-					$body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
+					$body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100)->format(\'webp\', 60) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
 					$body .= "\t" . '@endif' . "\n";
 					break;
 				case 'file':

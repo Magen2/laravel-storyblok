@@ -306,6 +306,54 @@ class Image extends Asset
 		return $leftPercent . '% ' . $topPercent . '%';
 	}
 
+    /**
+     * Returns if the image is portrait
+     *
+     * @return bool
+     */
+    public function isPortrait(): bool
+    {
+        return $this->width() < $this->height();
+    }
+
+    /**
+     * Returns if the image is landscape
+     *
+     * @return bool
+     */
+    public function isLandscape(): bool
+    {
+        return $this->width() > $this->height();
+    }
+
+    /**
+     * Returns if the image is square
+     *
+     * @return bool
+     */
+    public function isSquare(): bool
+    {
+        return $this->width() === $this->height();
+    }
+
+    /**
+     * Returns the image orientation
+     *
+     * @return string
+     */
+    public function orientation(): string
+    {
+        if ($this->isPortrait()) {
+            return 'portrait';
+        }
+
+        if ($this->isLandscape()) {
+            return 'landscape';
+        }
+
+        return 'square';
+    }
+
 	/**
 	 * Converts string fields into full image fields
 	 *
