@@ -6,6 +6,13 @@ namespace Riclep\Storyblok;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Storyblok\Api\StoriesApi;
+use Storyblok\Api\Request\StoryRequest;
+use Storyblok\Api\Domain\Value\Resolver\RelationCollection;
+use Storyblok\Api\Domain\Value\Resolver\ResolveLinks;
+use Storyblok\Api\Domain\Value\Resolver\ResolveLinksLevel;
+use Storyblok\Api\Domain\Value\Resolver\ResolveLinksType;
+use Storyblok\Api\Domain\Value\Uuid;
 use Storyblok\ApiException;
 
 class RequestStory
@@ -87,30 +94,22 @@ class RequestStory
 	 */
 	private function makeRequest($slugOrUuid): array
 	{
-		$storyblokClient = resolve('Storyblok\Client');
+		/** @var \Riclep\Storyblok\ContentApi $contentApi */
+		$contentApi = resolve(\Riclep\Storyblok\ContentApi::class);
+
+		$options = [
+			'language' => $this->language ?? 'default',
+		];
 
 		if ($this->resolveRelations) {
-			$storyblokClient = $storyblokClient->resolveRelations($this->resolveRelations);
+			$options['resolve_relations'] = explode(',', $this->resolveRelations);
 		}
 
 		if (config('storyblok.resolve_links')) {
-			$storyblokClient = $storyblokClient->resolveLinks(config('storyblok.resolve_links'));
+			$options['resolve_links'] = config('storyblok.resolve_links');
+			$options['resolve_links_level'] = config('storyblok.resolve_links_level', 0);
 		}
 
-		if ($this->language) {
-			$storyblokClient = $storyblokClient->language($this->language);
-		}
-
-		if ($this->fallbackLanguage) {
-			$storyblokClient = $storyblokClient->fallbackLanguage($this->fallbackLanguage);
-		}
-
-		if (Str::isUuid($slugOrUuid)) {
-			$storyblokClient =  $storyblokClient->getStoryByUuid($slugOrUuid);
-		} else {
-			$storyblokClient =  $storyblokClient->getStoryBySlug($slugOrUuid);
-		}
-
-		return $storyblokClient->getBody();
+		return $contentApi->story($slugOrUuid, $options);
 	}
 }

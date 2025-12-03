@@ -4,168 +4,175 @@ namespace Riclep\Storyblok\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Riclep\Storyblok\Traits\HasChildClasses;
-use Storyblok\ApiException;
-use Storyblok\ManagementClient;
 
 class StubViewsCommand extends Command
 {
-	use HasChildClasses;
+    use HasChildClasses;
 
-	/**
-	 * The name and signature of the console command.
-	 *
-	 * @var string
-	 */
-	protected $signature = 'ls:stub-views {--O|overwrite}';
+    /**
+     * The name and signature of the console command.
+     *
+     * @var string
+     */
+    protected $signature = 'ls:stub-views {--O|overwrite}';
 
-	/**
-	 * The console command description.
-	 *
-	 * @var string
-	 */
-	protected $description = 'Command description';
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
+    protected $description = 'Generate stub Blade views for Storyblok components.';
 
-	/**
-	 * Create a new command instance.
-	 *
-	 * @return void
-	 */
-	public function __construct()
-	{
-		parent::__construct();
-	}
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+    }
 
-	/**
-	 * Execute the console command.
-	 *
-	 * @return void
-	 * @throws ApiException
-	 */
-	public function handle(): void
-	{
-		$this->makeDirectories();
+    /**
+     * Execute the console command.
+     *
+     * @return void
+     */
+    public function handle(): void
+    {
+        $this->makeDirectories();
 
-		$client = new ManagementClient(
-            apiKey:config('storyblok.oauth_token'),
-            apiEndpoint: config('storyblok.management_api_base_url'),
-            ssl: config('storyblok.use_ssl'),
-        );
+        $response = Http::withHeader('Authorization', config('storyblok.oauth_token'))
+            ->withOptions([
+                'base_uri' => (config('storyblok.use_ssl') ? 'https://' : 'http://') . rtrim((string) config('storyblok.management_api_base_url'), '/'),
+            ])
+            ->get('v1/spaces/' . config('storyblok.space_id') . '/components/');
 
-		$components = collect($client->get('spaces/' . config('storyblok.space_id') . '/components/')->getBody()['components']);
+        if ($response->failed()) {
+            $this->error('Failed to fetch components from Storyblok Management API: ' . $response->body());
+            return;
+        }
 
-		$components->each(function ($component) {
-			$path = resource_path('views/' . str_replace('.', '/', config('storyblok.view_path')) . 'blocks/');
-			$filename =  $component['name'] . '.blade.php';
+        $components = collect($response->json('components') ?? []);
 
-			if ($this->option('overwrite') || !file_exists($path . $filename)) {
-				$content = file_get_contents(__DIR__ . '/stubs/blade.stub');
-				$content = str_replace([
-					'#NAME#',
-					'#CLASS#'
-				], [
-					$component['name'],
-					$this->getChildClassName('Block', $component['name'])
-				], $content);
+        $components->each(function ($component) {
+            $path = resource_path('views/' . str_replace('.', '/', config('storyblok.view_path')) . 'blocks/');
+            $filename =  $component['name'] . '.blade.php';
 
-				$body = '';
+            if ($this->option('overwrite') || !file_exists($path . $filename)) {
+                $content = file_get_contents(__DIR__ . '/stubs/blade.stub');
+                $content = str_replace([
+                    '#NAME#',
+                    '#CLASS#'
+                ], [
+                    $component['name'],
+                    $this->getChildClassName('Block', $component['name'])
+                ], $content);
 
-				foreach ($component['schema'] as $name => $field) {
-					$body = $this->writeBlade($field, $name, $body);
-				}
+                $body = '';
 
-				$content = str_replace('#BODY#', $body, $content);
+                foreach ($component['schema'] as $name => $field) {
+                    $body = $this->writeBlade($field, $name, $body);
+                }
 
-				file_put_contents($path . $filename, $content);
+                $content = str_replace('#BODY#', $body, $content);
 
-				$this->info('Created View: '. $component['name'] . '.blade.php');
-			}
-		});
+                file_put_contents($path . $filename, $content);
 
-		if ($this->option('overwrite') || !file_exists(resource_path('views/storyblok/pages') . '/page.blade.php')) {
-			File::copy(__DIR__ . '/stubs/page.blade.stub', resource_path('views/storyblok/pages') . '/page.blade.php');
+                $this->info('Created View: '. $component['name'] . '.blade.php');
+            }
+        });
 
-			$this->info('Created Page: page.blade.php');
+        if ($this->option('overwrite') || !file_exists(resource_path('views/storyblok/pages') . '/page.blade.php')) {
+            File::copy(__DIR__ . '/stubs/page.blade.stub', resource_path('views/storyblok/pages') . '/page.blade.php');
 
-			$this->info('Files created in your views' . DIRECTORY_SEPARATOR . 'storyblok folder.');
-		}
-	}
+            $this->info('Created Page: page.blade.php');
 
-	/**
-	 * @return void
-	 */
-	protected function makeDirectories(): void
-	{
-		if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.')))) {
-			File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.')));
-		}
+            $this->info('Files created in your views' . DIRECTORY_SEPARATOR . 'storyblok folder.');
+        }
+    }
 
-		if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/blocks'))) {
-			File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/blocks'));
-		}
+    /**
+     * Ensure the Storyblok view directories exist.
+     *
+     * @return void
+     */
+    protected function makeDirectories(): void
+    {
+        if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.')))) {
+            File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.')));
+        }
 
-		if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/pages'))) {
-			File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/pages'));
-		}
-	}
+        if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/blocks'))) {
+            File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/blocks'));
+        }
 
-	/**
-	 * @param $field
-	 * @param int|string $name
-	 * @param string $body
-	 * @return string
-	 */
-	protected function writeBlade($field, int|string $name, string $body): string
-	{
-		if (!str_starts_with($name, 'tab-')) {
-			switch ($field['type']) {
-				case 'options':
-				case 'bloks':
-					$body .= "\t" . '@if ($block->' . $name . ')' . "\n";
-					$body .= "\t\t" . '@foreach ($block->' . $name . ' as $childBlock)' . "\n";
-					$body .= "\t\t\t" . '{{ $childBlock->render() }}' . "\n";
-					$body .= "\t\t" . '@endforeach' . "\n";
-					$body .= "\t" . '@endif' . "\n";
-					break;
-				case 'datetime':
-					$body .= "\t" . '<time datetime="{{ $block->' . $name . '->content()->toIso8601String() }}">{{ $block->' . $name . ' }}</time>' . "\n";
-					break;
-				case 'number':
-				case 'text':
-					$body .= "\t" . '<p>{{ $block->' . $name . ' }}</p>' . "\n";
-					break;
-				case 'multilink':
-					$body .= "\t" . '<a href="{{ $block->' . $name . '->cached_url }}"></a>' . "\n";
-					break;
-				case 'textarea':
-				case 'richtext':
-					$body .= "\t" . '<div>{!! $block->' . $name . ' !!}</div>' . "\n";
-					break;
-				case 'asset':
-					if (array_key_exists('filetypes', $field) && in_array('images', $field['filetypes'], true)) {
-						$body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-						$body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
-						$body .= "\t" . '@endif' . "\n";
-					} else {
-						$body .= "\t" . '<a href="{{ $block->' . $name . ' }}">Download</a>' . "\n";
-					}
-					break;
-				case 'image':
-					$body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-					$body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100)->format(\'webp\', 60) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
-					$body .= "\t" . '@endif' . "\n";
-					break;
-				case 'file':
-					$body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-					$body .= "\t\t" . '<a href="{{ $block->' . $name . ' }}">{{ $block->' . $name . '->filename }}</a>' . "\n";
-					$body .= "\t" . '@endif' . "\n";
-					break;
-				default:
-					$body .= "\t" . '{{ $block->' . $name . ' }}' . "\n";
-			}
-		}
+        if (!file_exists(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/pages'))) {
+            File::makeDirectory(resource_path('views/' . rtrim(config('storyblok.view_path'), '.') . '/pages'));
+        }
+    }
 
-		$body .= "\n";
-		return $body;
-	}
+    /**
+     * Build the Blade template body for a single Storyblok field.
+     *
+     * @param array      $field
+     * @param int|string $name
+     * @param string     $body
+     * @return string
+     */
+    protected function writeBlade($field, int|string $name, string $body): string
+    {
+        if (!str_starts_with($name, 'tab-')) {
+            switch ($field['type']) {
+                case 'options':
+                case 'bloks':
+                    $body .= "\t" . '@if ($block->' . $name . ')' . "\n";
+                    $body .= "\t\t" . '@foreach ($block->' . $name . ' as $childBlock)' . "\n";
+                    $body .= "\t\t\t" . '{{ $childBlock->render() }}' . "\n";
+                    $body .= "\t\t" . '@endforeach' . "\n";
+                    $body .= "\t" . '@endif' . "\n";
+                    break;
+                case 'datetime':
+                    $body .= "\t" . '<time datetime="{{ $block->' . $name . '->content()->toIso8601String() }}">{{ $block->' . $name . ' }}</time>' . "\n";
+                    break;
+                case 'number':
+                case 'text':
+                    $body .= "\t" . '<p>{{ $block->' . $name . ' }}</p>' . "\n";
+                    break;
+                case 'multilink':
+                    $body .= "\t" . '<a href="{{ $block->' . $name . '->cached_url }}"></a>' . "\n";
+                    break;
+                case 'textarea':
+                case 'richtext':
+                    $body .= "\t" . '<div>{!! $block->' . $name . ' !!}</div>' . "\n";
+                    break;
+                case 'asset':
+                    if (array_key_exists('filetypes', $field) && in_array('images', $field['filetypes'], true)) {
+                        $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
+                        $body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
+                        $body .= "\t" . '@endif' . "\n";
+                    } else {
+                        $body .= "\t" . '<a href="{{ $block->' . $name . ' }}">Download</a>' . "\n";
+                    }
+                    break;
+                case 'image':
+                    $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
+                    $body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100)->format(\'webp\', 60) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
+                    $body .= "\t" . '@endif' . "\n";
+                    break;
+                case 'file':
+                    $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
+                    $body .= "\t\t" . '<a href="{{ $block->' . $name . ' }}">{{ $block->' . $name . '->filename }}</a>' . "\n";
+                    $body .= "\t" . '@endif' . "\n";
+                    break;
+                default:
+                    $body .= "\t" . '{{ $block->' . $name . ' }}' . "\n";
+            }
+        }
+
+        $body .= "\n";
+        return $body;
+    }
 }

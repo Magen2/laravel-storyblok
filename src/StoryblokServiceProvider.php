@@ -8,12 +8,15 @@ use Riclep\Storyblok\Console\BlockSyncCommand;
 use Riclep\Storyblok\Console\FolderMakeCommand;
 use Riclep\Storyblok\Console\PageMakeCommand;
 use Riclep\Storyblok\Console\StubViewsCommand;
-use Storyblok\Client;
+use Storyblok\Api\StoryblokClient;
+use Storyblok\Api\StoriesApi;
 
 class StoryblokServiceProvider extends ServiceProvider
 {
     /**
      * Bootstrap the application services.
+     *
+     * @return void
      */
     public function boot(): void
     {
@@ -42,18 +45,40 @@ class StoryblokServiceProvider extends ServiceProvider
 
     /**
      * Register the application services.
+     *
+     * @return void
      */
     public function register(): void
     {
         // Automatically apply the package configuration
         $this->mergeConfigFrom(__DIR__.'/../config/storyblok.php', 'storyblok');
 
-        // Register the main class to use with the facade
-		$this->app->singleton('storyblok', function () {
-			return new Storyblok;
-		});
+        // Instantiate the new Storyblok Content API client
+        $token = config('storyblok.draft') ? config('storyblok.api_preview_key') : config('storyblok.api_public_key');
+        $rawBase = (string) config('storyblok.delivery_api_base_url');
+        $baseUri = rtrim($rawBase, '/');
+        // ensure scheme present for Symfony HttpClient
+        if (!str_starts_with($baseUri, 'http://') && !str_starts_with($baseUri, 'https://')) {
+            $baseUri = (config('storyblok.use_ssl') ? 'https://' : 'http://') . $baseUri;
+        }
+        $client = new StoryblokClient($baseUri, (string) $token);
 
-		////////////TODO should this be a middleware?
+        $this->app->instance(StoryblokClient::class, $client);
+
+        $version = config('storyblok.draft') ? 'draft' : 'published';
+        $storiesApi = new StoriesApi($client, $version);
+        $this->app->instance(StoriesApi::class, $storiesApi);
+
+        // Bind ContentApi wrapper for legacy-style access
+        $this->app->singleton(\Riclep\Storyblok\ContentApi::class, function() use ($storiesApi) {
+            return new \Riclep\Storyblok\ContentApi($storiesApi);
+        });
+
+        // Register the main class to use with the facade, injecting StoriesApi
+        $this->app->singleton('storyblok', function () use ($storiesApi) {
+            return new Storyblok($storiesApi);
+        });
+
 	    $storyblokRequest = request()->get('_storyblok_tk');
 		if (!empty($storyblokRequest)) {
 			$pre_token = $storyblokRequest['space_id'] . ':' . config('storyblok.api_preview_key') . ':' . $storyblokRequest['timestamp'];
@@ -63,29 +88,5 @@ class StoryblokServiceProvider extends ServiceProvider
 				config(['storyblok.draft' => true]);
 			}
 		}
-
-	    // register the Storyblok client, checking if we are in edit more of the dev requests draft content
-	    $client = new Client(
-			config('storyblok.draft') ? config('storyblok.api_preview_key') : config('storyblok.api_public_key'),
-            config('storyblok.delivery_api_base_url'), "v2", config('storyblok.use_ssl'), config('storyblok.api_region')
-	    );
-
-	    // if we’re in Storyblok’s edit mode let’s save that in the config for easy access
-	    $client->editMode(config('storyblok.draft'));
-
-        // the client's cache needs to be set or else the client's private isCache() will always return false
-        if( config('storyblok.draft') == false && config('storyblok.cache') == true){
-            $client->setCache(config('storyblok.sb_cache_driver'), [
-                'path' => config('storyblok.sb_cache_path'),
-                'default_lifetime' => config('storyblok.sb_cache_lifetime'),
-            ]);
-        };
-
-	    // This singleton allows to retrieve the driver set has default from the manager
-	    $this->app->singleton('image-transformer.driver', function ($app) {
-		    return $app['image-transformer']->driver();
-	    });
-
-		$this->app->instance('Storyblok\Client', $client);
     }
 }

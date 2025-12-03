@@ -3,29 +3,33 @@
 namespace Riclep\Storyblok\Http\Controllers;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
 use Riclep\Storyblok\StoryblokFacade as Storyblok;
 
 
 class StoryblokController
 {
     /**
-     * Loads a story rendering the content in the matched view.
+     * Display a Storyblok page for the given slug.
      *
      * @param string $slug
-     * @return \Illuminate\View\View
+     * @return View
      * @throws \Exception
      */
-    public function show($slug = 'home'): \Illuminate\View\View
+    public function show($slug = 'home'): View
     {
         if ($this->isDenylisted($slug)) {
             throw new \Riclep\Storyblok\Exceptions\DenylistedUrlException($slug);
         }
 
+        // Use the Storyblok Page::render() flow so storyblok.pages.page is used
         return Storyblok::read($slug)->render();
     }
 
     /**
-     * Deletes the cached API responses
+     * Delete the cached Storyblok API responses.
+     *
+     * @return void
      */
     public function destroy(): void
     {
@@ -37,7 +41,7 @@ class StoryblokController
     }
 
     /**
-     * Check if the slug is blacklisted.
+     * Determine if the given slug is denylisted.
      *
      * @param string $slug
      * @return bool

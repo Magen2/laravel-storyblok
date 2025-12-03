@@ -454,55 +454,48 @@ class Block implements \IteratorAggregate, \JsonSerializable
 	 */
     public function inverseRelation(string $foreignRelationshipField, string $foreignRelationshipType = 'multi', ?array $components = null, ?array $options = null, ?array $resolveRelations = null): array
     {
-        $storyblokClient = resolve('Storyblok\Client');
+        /** @var \Riclep\Storyblok\ContentApi $contentApi */
+        $contentApi = resolve(\Riclep\Storyblok\ContentApi::class);
 
-        $type = 'any_in_array';
+        $type = $foreignRelationshipType === 'single' ? 'in' : 'any_in_array';
 
-        if ($foreignRelationshipType === 'single') {
-            $type = 'in';
-        }
-
-        $query = [
-            'filter_query' => [
-                $foreignRelationshipField => [$type => $this->meta('page_uuid') ?? $this->page()->uuid()]
+        $filterQuery = [
+            $foreignRelationshipField => [
+                $type => [$this->meta('page_uuid') ?? $this->page()->uuid()],
             ],
         ];
 
         if ($components) {
-            $query = array_merge_recursive($query, [
-                'filter_query' => [
-                    'component' => ['in' => $components],
-                ]
-            ]);
+            $filterQuery['component'] = ['in' => $components];
         }
 
-        if ($options) {
-            $query = array_merge_recursive($query, $options);
+        if ($options && isset($options['filter_query'])) {
+            // merge additional filters keeping multi-ops
+            foreach ($options['filter_query'] as $field => $ops) {
+                if (!isset($filterQuery[$field])) {
+                    $filterQuery[$field] = $ops; continue;
+                }
+                foreach ($ops as $op => $val) {
+                    $filterQuery[$field][$op] = $val;
+                }
+            }
         }
+
+        $settings = [
+            'filter_query' => $filterQuery,
+        ];
 
         if ($resolveRelations) {
-            $storyblokClient->resolveRelations(implode(',', $resolveRelations));
+            $settings['resolve_relations'] = $resolveRelations;
         }
 
         if (request()->has('_storyblok') || !config('storyblok.cache')) {
-            $storyblokClient->getStories($query);
-
-            $response = [
-                'headers' => $storyblokClient->getHeaders(),
-                'stories' => $storyblokClient->getBody()['stories'],
-            ];
+            $response = $contentApi->stories($settings);
         } else {
-            $apiHash = md5(config('storyblok.api_public_key') ?? config('storyblok.api_preview_key')); // unique id for multitenancy applications
-
-            $uniqueTag = md5(serialize($query));
-
-            $response = Cache::store(config('storyblok.sb_cache_driver'))->remember($foreignRelationshipField . '-' . $foreignRelationshipType . '-' . $apiHash . '-' . $uniqueTag, config('storyblok.cache_duration') * 60, function () use ($storyblokClient, $query) {
-                $storyblokClient->getStories($query);
-
-                return [
-                    'headers' => $storyblokClient->getHeaders(),
-                    'stories' => $storyblokClient->getBody()['stories'],
-                ];
+            $apiHash = md5(config('storyblok.api_public_key') ?? config('storyblok.api_preview_key'));
+            $uniqueTag = md5(serialize($settings));
+            $response = Cache::store(config('storyblok.sb_cache_driver'))->remember($foreignRelationshipField . '-' . $foreignRelationshipType . '-' . $apiHash . '-' . $uniqueTag, config('storyblok.cache_duration') * 60, function () use ($contentApi, $settings) {
+                return $contentApi->stories($settings);
             });
         }
 

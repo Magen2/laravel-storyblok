@@ -235,13 +235,15 @@ abstract class Folder
 	 */
 	protected function makeRequest(): array
 	{
-		$storyblokClient = resolve('Storyblok\Client');
+		/** @var \Riclep\Storyblok\ContentApi $contentApi */
+		$contentApi = resolve(\Riclep\Storyblok\ContentApi::class);
 
-		$storyblokClient =  $storyblokClient->getStories($this->getSettings());
+		$settings = $this->getSettings();
+		$response = $contentApi->stories($settings);
 
 		return [
-			'headers' => $storyblokClient->getHeaders(),
-			'stories' => $storyblokClient->getBody()['stories'],
+			'headers' => $response['headers'],
+			'stories' => $response['stories'],
 		];
 	}
 
