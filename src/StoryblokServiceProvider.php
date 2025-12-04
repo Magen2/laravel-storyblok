@@ -53,15 +53,20 @@ class StoryblokServiceProvider extends ServiceProvider
         // Automatically apply the package configuration
         $this->mergeConfigFrom(__DIR__.'/../config/storyblok.php', 'storyblok');
 
-        // Instantiate the new Storyblok Content API client
         $token = config('storyblok.draft') ? config('storyblok.api_preview_key') : config('storyblok.api_public_key');
         $rawBase = (string) config('storyblok.delivery_api_base_url');
         $baseUri = rtrim($rawBase, '/');
-        // ensure scheme present for Symfony HttpClient
         if (!str_starts_with($baseUri, 'http://') && !str_starts_with($baseUri, 'https://')) {
             $baseUri = (config('storyblok.use_ssl') ? 'https://' : 'http://') . $baseUri;
         }
+
         $client = new StoryblokClient($baseUri, (string) $token);
+
+        // Configure cache on the official client in published + cache mode
+        if (!config('storyblok.draft') && config('storyblok.cache')) {
+            $storage = new \Storyblok\Api\CacheVersion\InMemoryStorage();
+            $client = $client->withCacheVersionStorage($storage);
+        }
 
         $this->app->instance(StoryblokClient::class, $client);
 
@@ -69,24 +74,17 @@ class StoryblokServiceProvider extends ServiceProvider
         $storiesApi = new StoriesApi($client, $version);
         $this->app->instance(StoriesApi::class, $storiesApi);
 
-        // Bind ContentApi wrapper for legacy-style access
-        $this->app->singleton(\Riclep\Storyblok\ContentApi::class, function() use ($storiesApi) {
+        $this->app->singleton(\Riclep\Storyblok\ContentApi::class, function () use ($storiesApi) {
             return new \Riclep\Storyblok\ContentApi($storiesApi);
         });
 
-        // Register the main class to use with the facade, injecting StoriesApi
         $this->app->singleton('storyblok', function () use ($storiesApi) {
             return new Storyblok($storiesApi);
         });
 
-	    $storyblokRequest = request()->get('_storyblok_tk');
-		if (!empty($storyblokRequest)) {
-			$pre_token = $storyblokRequest['space_id'] . ':' . config('storyblok.api_preview_key') . ':' . $storyblokRequest['timestamp'];
-			$token = sha1($pre_token);
-			if ($token == $storyblokRequest['token'] && (int)$storyblokRequest['timestamp'] > strtotime('now') - 3600) {
-				config(['storyblok.edit_mode' => true]);
-				config(['storyblok.draft' => true]);
-			}
-		}
+        // Image transformer driver singleton (matching previous behaviour)
+        $this->app->singleton('image-transformer.driver', function ($app) {
+            return $app['image-transformer']->driver();
+        });
     }
 }
