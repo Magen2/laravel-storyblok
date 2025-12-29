@@ -1,8 +1,6 @@
 <?php
 /** @var \App\Storyblok\Blocks\DummyClass $block */
-// dd($block);
 ?>
-
 <div class="DummyCssClass" {!! $block->editorLink(true) !!}>
 
 </div>

@@ -7,38 +7,25 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Riclep\Storyblok\Traits\HasChildClasses;
 
+/**
+ * Generate stub Blade views for Storyblok components.
+ */
 class StubViewsCommand extends Command
 {
     use HasChildClasses;
 
     /**
-     * The name and signature of the console command.
-     *
-     * @var string
+     * @var string The name and signature of the console command
      */
     protected $signature = 'ls:stub-views {--O|overwrite}';
 
     /**
-     * The console command description.
-     *
-     * @var string
+     * @var string The console command description
      */
     protected $description = 'Generate stub Blade views for Storyblok components.';
 
     /**
-     * Create a new command instance.
-     *
-     * @return void
-     */
-    public function __construct()
-    {
-        parent::__construct();
-    }
-
-    /**
      * Execute the console command.
-     *
-     * @return void
      */
     public function handle(): void
     {
@@ -96,8 +83,6 @@ class StubViewsCommand extends Command
 
     /**
      * Ensure the Storyblok view directories exist.
-     *
-     * @return void
      */
     protected function makeDirectories(): void
     {
@@ -116,63 +101,67 @@ class StubViewsCommand extends Command
 
     /**
      * Build the Blade template body for a single Storyblok field.
-     *
-     * @param array      $field
-     * @param int|string $name
-     * @param string     $body
-     * @return string
      */
-    protected function writeBlade($field, int|string $name, string $body): string
+    protected function writeBlade(array $field, int|string $name, string $body): string
     {
-        if (!str_starts_with($name, 'tab-')) {
-            switch ($field['type']) {
-                case 'options':
-                case 'bloks':
-                    $body .= "\t" . '@if ($block->' . $name . ')' . "\n";
-                    $body .= "\t\t" . '@foreach ($block->' . $name . ' as $childBlock)' . "\n";
-                    $body .= "\t\t\t" . '{{ $childBlock->render() }}' . "\n";
-                    $body .= "\t\t" . '@endforeach' . "\n";
-                    $body .= "\t" . '@endif' . "\n";
-                    break;
-                case 'datetime':
-                    $body .= "\t" . '<time datetime="{{ $block->' . $name . '->content()->toIso8601String() }}">{{ $block->' . $name . ' }}</time>' . "\n";
-                    break;
-                case 'number':
-                case 'text':
-                    $body .= "\t" . '<p>{{ $block->' . $name . ' }}</p>' . "\n";
-                    break;
-                case 'multilink':
-                    $body .= "\t" . '<a href="{{ $block->' . $name . '->cached_url }}"></a>' . "\n";
-                    break;
-                case 'textarea':
-                case 'richtext':
-                    $body .= "\t" . '<div>{!! $block->' . $name . ' !!}</div>' . "\n";
-                    break;
-                case 'asset':
-                    if (array_key_exists('filetypes', $field) && in_array('images', $field['filetypes'], true)) {
-                        $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-                        $body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
-                        $body .= "\t" . '@endif' . "\n";
-                    } else {
-                        $body .= "\t" . '<a href="{{ $block->' . $name . ' }}">Download</a>' . "\n";
-                    }
-                    break;
-                case 'image':
-                    $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-                    $body .= "\t\t" . '<img src="{{ $block->' . $name . '->transform()->resize(100, 100)->format(\'webp\', 60) }}" width="{{ $block->' . $name . '->width() }}" height="{{ $block->' . $name . '->height() }}" alt="{{ $block->' . $name . '->alt() }}">' . "\n";
-                    $body .= "\t" . '@endif' . "\n";
-                    break;
-                case 'file':
-                    $body .= "\t" . '@if ($block->' . $name . '->hasFile())' . "\n";
-                    $body .= "\t\t" . '<a href="{{ $block->' . $name . ' }}">{{ $block->' . $name . '->filename }}</a>' . "\n";
-                    $body .= "\t" . '@endif' . "\n";
-                    break;
-                default:
-                    $body .= "\t" . '{{ $block->' . $name . ' }}' . "\n";
-            }
+        if (str_starts_with($name, 'tab-')) {
+            return $body;
         }
 
-        $body .= "\n";
+        switch ($field['type']) {
+            case 'options':
+            case 'bloks':
+                $body .= "    @if (\$block->{$name})\n";
+                $body .= "        @foreach (\$block->{$name} as \$childBlock)\n";
+                $body .= "            {{ \$childBlock->render() }}\n";
+                $body .= "        @endforeach\n";
+                $body .= "    @endif\n";
+                break;
+
+            case 'datetime':
+                $body .= "    <time datetime=\"{{ \$block->{$name}->content()->toIso8601String() }}\">{{ \$block->{$name} }}</time>\n";
+                break;
+
+            case 'number':
+            case 'text':
+                $body .= "    <p>{{ \$block->{$name} }}</p>\n";
+                break;
+
+            case 'multilink':
+                $body .= "    <a href=\"{{ \$block->{$name}->cached_url }}\"></a>\n";
+                break;
+
+            case 'textarea':
+            case 'richtext':
+                $body .= "    <div>{!! \$block->{$name} !!}</div>\n";
+                break;
+
+            case 'asset':
+                if (array_key_exists('filetypes', $field) && in_array('images', $field['filetypes'], true)) {
+                    $body .= "    @if (\$block->{$name}->hasFile())\n";
+                    $body .= "        <img src=\"{{ \$block->{$name}->transform()->resize(100, 100) }}\" width=\"{{ \$block->{$name}->width() }}\" height=\"{{ \$block->{$name}->height() }}\" alt=\"{{ \$block->{$name}->alt() }}\">\n";
+                    $body .= "    @endif\n";
+                } else {
+                    $body .= "    <a href=\"{{ \$block->{$name} }}\">Download</a>\n";
+                }
+                break;
+
+            case 'image':
+                $body .= "    @if (\$block->{$name}->hasFile())\n";
+                $body .= "        <img src=\"{{ \$block->{$name}->transform()->resize(100, 100)->format('webp', 60) }}\" width=\"{{ \$block->{$name}->width() }}\" height=\"{{ \$block->{$name}->height() }}\" alt=\"{{ \$block->{$name}->alt() }}\">\n";
+                $body .= "    @endif\n";
+                break;
+
+            case 'file':
+                $body .= "    @if (\$block->{$name}->hasFile())\n";
+                $body .= "        <a href=\"{{ \$block->{$name} }}\">{{ \$block->{$name}->filename }}</a>\n";
+                $body .= "    @endif\n";
+                break;
+
+            default:
+                $body .= "    {{ \$block->{$name} }}\n";
+        }
+
         return $body;
     }
 }

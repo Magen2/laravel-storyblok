@@ -1,6 +1,3 @@
-<?php
-/* @var $block \#CLASS# */
-?>
+{{-- @var \#CLASS# $block --}}
 <div class="#NAME#" {!! $block->editorLink(true) !!}>
-#BODY#
-</div>
+#BODY#</div>
