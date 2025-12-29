@@ -1,23 +1,22 @@
-<?php
-/* @var $story \App\Storyblok\Page */
+@extends('index')
 
-// This is dummy page to get you started, extend it in your own views, add sections
-// delete it or do whatever else you need to make it work for your project!
-?>
+@section('title', $story->meta_title ?? config('app.name'))
 
+@if ($story->meta_description ?? false)
+    @section('meta_description', $story->meta_description)
+@endif
 
-@section('title')
-	{{ $story->meta('name') }}
-@stop
+@if ($story->meta_keywords ?? false)
+    @section('meta_keywords', $story->meta_keywords)
+@endif
 
+@section('content')
+    <div {!! $story->block()->editorLink() !!}>
+        @if ($story->body)
+            @foreach ($story->body as $block)
+                {!! $block->render() !!}
+            @endforeach
+        @endif
+    </div>
+@endsection
 
-<main>
-{{--
-	// assuming you have a field called ‘blocks’ in your story
-	// this will loop over and render them all for you
-
-	@foreach ($story->blocks as $childBlock)
-		{{ $childBlock->render() }}
-	@endforeach
---}}
-</main>
