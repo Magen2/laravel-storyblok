@@ -355,4 +355,15 @@ return [
         // '/^user\/\d+\/edit$/', // Blocks URLs like "user/123/edit"
         // '/\.(php|sql|exe)$/', // Blocks URLs ending with .php, .sql, or .exe
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | 404 Page Slug
+    |--------------------------------------------------------------------------
+    |
+    | The Storyblok story slug to load when a page is not found. Set to null
+    | to disable custom 404 handling and let the exception propagate.
+    |
+    */
+    '404_slug' => env('STORYBLOK_404_SLUG', null),
 ];
