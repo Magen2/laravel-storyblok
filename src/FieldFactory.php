@@ -154,11 +154,11 @@ class FieldFactory
     }
 
     protected function relationField($block, $field, $key) {
-        // it’s an array of relations - request them if we’re auto or manual resolving
+        // it's an array of relations - request them if we're auto or manual resolving
         if (Str::isUuid($field[0])) {
             if ($block->_autoResolveRelations || array_key_exists($key, $block->_resolveRelations) || in_array($key, $block->_resolveRelations, true)) {
 
-                // they’re passing a custom class
+                // they're passing a custom class
                 if (array_key_exists($key, $block->_resolveRelations)) {
                     $relations = collect($field)->transform(fn($relation) => $block->getRelation(new RequestStory(), $relation, $block->_resolveRelations[$key]));
                 } else {
@@ -175,23 +175,7 @@ class FieldFactory
 
         // has child items - single option, multi option and Blocks fields
         if (is_array($field[0])) {
-            // resolved relationships - entire story is returned, we just want the content and a few meta items
-            if (array_key_exists('content', $field[0])) {
-                return collect($field)->transform(function ($relation) use ($block) {
-                    $class = $block->getChildClassName('Block', $relation['content']['component']);
-                    $relationClass = new $class($relation['content'], $block);
-
-                    $relationClass->addMeta([
-                        'name' => $relation['name'],
-                        'published_at' => $relation['published_at'],
-                        'full_slug' => $relation['full_slug'],
-                    ]);
-
-                    return $relationClass;
-                });
-            }
-
-            // this field holds blocks!
+            // this field holds blocks! (check for 'component' first as blocks may also have a 'content' field)
             if (array_key_exists('component', $field[0])) {
                 return collect($field)->transform(function ($childBlock) use ($block) {
                     $class = $block->getChildClassName('Block', $childBlock['component']);
@@ -199,6 +183,30 @@ class FieldFactory
                     return new $class($childBlock, $block);
                 });
             }
+
+            // resolved relationships - entire story is returned, we just want the content and a few meta items
+            if (array_key_exists('content', $field[0]) && is_array($field[0]['content'])) {
+                return collect($field)
+                    ->filter(function ($relation) {
+                        // Filter out relations that don't have valid content/component (e.g., deleted stories)
+                        return isset($relation['content'])
+                            && is_array($relation['content'])
+                            && isset($relation['content']['component']);
+                    })
+                    ->transform(function ($relation) use ($block) {
+                        $class = $block->getChildClassName('Block', $relation['content']['component']);
+                        $relationClass = new $class($relation['content'], $block);
+
+                        $relationClass->addMeta([
+                            'name' => $relation['name'],
+                            'published_at' => $relation['published_at'],
+                            'full_slug' => $relation['full_slug'],
+                        ]);
+
+                        return $relationClass;
+                    });
+            }
+
 
             // multi assets
             if (array_key_exists('filename', $field[0])) {

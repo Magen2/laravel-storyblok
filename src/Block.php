@@ -289,7 +289,7 @@ class Block implements \IteratorAggregate, \JsonSerializable
 
 	/**
 	 * Returns the HTML comment required for making this Block clickable in
-	 * Storyblok’s visual editor. Don’t forget to set comments to true in
+	 * Storyblok's visual editor. Don't forget to set comments to true in
 	 * your Vue.js app configuration.
 	 *
      * @param $attribute bool return a data-* attribute or comment for editor link
@@ -299,7 +299,8 @@ class Block implements \IteratorAggregate, \JsonSerializable
 	{
 		if (array_key_exists('_editable', $this->_meta) && config('storyblok.edit_mode')) {
             if ($attribute) {
-                return 'data-blok-c=\'' . str_replace(['<!--#storyblok#', '-->'], '', $this->_meta['_editable']) . '\'';
+                $json = str_replace(['<!--#storyblok#', '-->'], '', $this->_meta['_editable']);
+                return 'data-blok-c="' . htmlspecialchars($json, ENT_QUOTES, 'UTF-8') . '" data-blok-uid="' . ($this->_meta['_uid'] ?? '') . '"';
             }
 
 			return $this->_meta['_editable'];

@@ -76,6 +76,7 @@ class Storyblok
 
 		$story = $response->story;
 
+
 		$class = $this->getChildClassName('Page', $story['content']['component']);
 
 		return new $class($story);
