@@ -200,6 +200,73 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Asset proxy enabled
+    |--------------------------------------------------------------------------
+    |
+    | Enable local asset proxy to hide Storyblok CDN URLs. When enabled,
+    | asset URLs will be rewritten to use a local endpoint that proxies
+    | requests to the Storyblok CDN.
+    |
+    */
+    'asset_proxy_enabled' => env('STORYBLOK_ASSET_PROXY_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Asset proxy path
+    |--------------------------------------------------------------------------
+    |
+    | The local URL path prefix for proxied assets. Assets will be served
+    | from this path (e.g., /assets/f/123456/image.jpg).
+    |
+    */
+    'asset_proxy_path' => env('STORYBLOK_ASSET_PROXY_PATH', '/assets'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Asset proxy cache
+    |--------------------------------------------------------------------------
+    |
+    | Enable caching of proxied assets to reduce latency and API calls.
+    |
+    */
+    'asset_proxy_cache' => env('STORYBLOK_ASSET_PROXY_CACHE', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Asset proxy cache store
+    |--------------------------------------------------------------------------
+    |
+    | Cache store to use for proxied assets. Redis is recommended for binary
+    | data as it handles large values better than file or database caches.
+    |
+    */
+    'asset_proxy_cache_store' => env('STORYBLOK_ASSET_PROXY_CACHE_STORE', 'file'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Asset proxy cache duration
+    |--------------------------------------------------------------------------
+    |
+    | How long to cache proxied assets in minutes. Default is 7 days (10080).
+    | Since Storyblok asset URLs are immutable, long cache times are safe.
+    |
+    */
+    'asset_proxy_cache_duration' => env('STORYBLOK_ASSET_PROXY_CACHE_DURATION', 60 * 24 * 7),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Asset proxy browser cache
+    |--------------------------------------------------------------------------
+    |
+    | Browser cache max-age in seconds for proxied assets. Default is 1 year
+    | (31536000). Long cache duration with immutable flag ensures good
+    | Lighthouse performance scores.
+    |
+    */
+    'asset_proxy_browser_cache' => env('STORYBLOK_ASSET_PROXY_BROWSER_CACHE', 31536000),
+
+    /*
+    |--------------------------------------------------------------------------
     | Image service domain
     |--------------------------------------------------------------------------
     |
@@ -213,10 +280,14 @@ return [
     | Image transformation driver
     |--------------------------------------------------------------------------
     |
-    | The class used for transforming images Fields / image URLs
+    | The class used for transforming images Fields / image URLs.
+    | Use StoryblokProxy to generate local proxy URLs when asset_proxy_enabled
+    | is true. This ensures asset URLs are rewritten to use the local proxy.
     |
     */
-    'image_transformer' => \Riclep\Storyblok\Support\ImageTransformers\Storyblok::class,
+    'image_transformer' => env('STORYBLOK_ASSET_PROXY_ENABLED', false)
+        ? \Riclep\Storyblok\Support\ImageTransformers\StoryblokProxy::class
+        : \Riclep\Storyblok\Support\ImageTransformers\Storyblok::class,
 
     /*
     |--------------------------------------------------------------------------
@@ -365,5 +436,5 @@ return [
     | to disable custom 404 handling and let the exception propagate.
     |
     */
-    '404_slug' => env('STORYBLOK_404_SLUG', null),
+    '404_slug' => env('STORYBLOK_404_SLUG', 'not-found'),
 ];
