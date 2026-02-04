@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Log;
 class AssetProxyController extends Controller
 {
     /**
+     * Browser cache max-age in seconds (1 year for immutable assets).
+     */
+    protected const BROWSER_CACHE_MAX_AGE = 31536000;
+
+    /**
      * Proxy an asset request to Storyblok.
      */
     public function proxy(Request $request, string $path): Response
@@ -33,10 +38,11 @@ class AssetProxyController extends Controller
             $cachedResponse = $cacheStore->get($cacheKey);
 
             if ($cachedResponse) {
-                return response(base64_decode($cachedResponse['body']))
-                    ->header('Content-Type', $cachedResponse['content_type'])
-                    ->header('Cache-Control', 'public, max-age=' . ($cacheDuration * 60))
-                    ->header('X-Cache', 'HIT');
+                return $this->createCachedResponse(
+                    base64_decode($cachedResponse['body']),
+                    $cachedResponse['content_type'],
+                    'HIT'
+                );
             }
         }
 
@@ -68,10 +74,7 @@ class AssetProxyController extends Controller
                 ], now()->addMinutes($cacheDuration));
             }
 
-            return response($body)
-                ->header('Content-Type', $contentType)
-                ->header('Cache-Control', 'public, max-age=' . ($cacheDuration * 60))
-                ->header('X-Cache', 'MISS');
+            return $this->createCachedResponse($body, $contentType, 'MISS');
         } catch (\Exception $e) {
             Log::error('Asset proxy exception', [
                 'url' => $storyblokUrl,
@@ -80,6 +83,22 @@ class AssetProxyController extends Controller
 
             return response('Failed to fetch asset', 502);
         }
+    }
+
+    /**
+     * Create a response with optimized cache headers for Lighthouse scores.
+     */
+    protected function createCachedResponse(string $body, string $contentType, string $cacheStatus): Response
+    {
+        $maxAge = config('storyblok.asset_proxy_browser_cache', self::BROWSER_CACHE_MAX_AGE);
+        $expiresDate = gmdate('D, d M Y H:i:s', time() + $maxAge) . ' GMT';
+
+        return response($body)
+            ->header('Content-Type', $contentType)
+            ->header('Cache-Control', 'public, max-age=' . $maxAge . ', immutable')
+            ->header('Expires', $expiresDate)
+            ->header('X-Cache', $cacheStatus)
+            ->header('Vary', 'Accept-Encoding');
     }
 
     /**
