@@ -8,17 +8,30 @@
             var isRendering = false;
             var abortController = null;
 
+            // Initialize StoryblokBridge with proper configuration
             var storyblokInstance = new StoryblokBridge({
-                accessToken: @js(config('storyblok.api_preview_key'))
+                resolveRelations: @js(config('storyblok.resolve_relations', [])),
+                preventClicks: true
             });
 
+            // Handle save/publish events - reload page to get fresh content
             storyblokInstance.on(['change', 'published'], function() {
                 window.location.reload();
             });
 
+            // Handle enter event - triggered when story is loaded in editor
+            storyblokInstance.on('enterEditmode', function(event) {
+                console.log('[Storyblok] Entered edit mode');
+            });
+
             @if (config('storyblok.live_preview'))
+            // Handle input event - triggered on every change in the editor
             storyblokInstance.on('input', function(event) {
-                if (!event.story) return;
+                console.log('[Storyblok] Input event received', event);
+                if (!event || !event.story) {
+                    console.log('[Storyblok] No story in event');
+                    return;
+                }
 
                 if (previewTimeout) {
                     clearTimeout(previewTimeout);
@@ -29,7 +42,11 @@
             });
 
             function renderLivePreview(story) {
-                if (isRendering) return;
+                console.log('[Storyblok] Rendering live preview for story:', story.name || story.slug);
+                if (isRendering) {
+                    console.log('[Storyblok] Already rendering, skipping');
+                    return;
+                }
                 isRendering = true;
 
                 if (abortController) {
@@ -48,20 +65,26 @@
                     signal: abortController.signal
                 })
                 .then(function(response) {
+                    console.log('[Storyblok] Preview response status:', response.status);
                     if (!response.ok) {
-                        console.error('Live preview render failed:', response.status);
-                        return null;
+                        return response.json().then(function(err) {
+                            console.error('[Storyblok] Live preview error:', err);
+                            return null;
+                        });
                     }
                     return response.json();
                 })
                 .then(function(data) {
+                    console.log('[Storyblok] Preview data received:', data);
                     if (data && data.success && data.blocks) {
                         updateBlocksInDom(data.blocks);
+                    } else if (data && data.error) {
+                        console.error('[Storyblok] Server error:', data.error);
                     }
                 })
                 .catch(function(error) {
                     if (error.name !== 'AbortError') {
-                        console.error('Live preview error:', error);
+                        console.error('[Storyblok] Live preview error:', error);
                     }
                 })
                 .finally(function() {
@@ -70,11 +93,24 @@
             }
 
             function updateBlocksInDom(blocks) {
+                console.log('[Storyblok] Updating DOM with', blocks.length, 'blocks');
                 var container = document.querySelector(@js(config('storyblok.live_element', '.page-container')));
-                if (!container) return;
+                if (!container) {
+                    console.error('[Storyblok] Container not found:', @js(config('storyblok.live_element', '.page-container')));
+                    return;
+                }
 
-                var newHtml = blocks.map(function(b) { return b.html; }).join('');
-                container.innerHTML = newHtml;
+                var newHtml = blocks.map(function(b) { return b.html; }).join('\n');
+
+                // Use a template element to parse HTML properly, preserving whitespace
+                var template = document.createElement('template');
+                template.innerHTML = newHtml;
+
+                // Clear container and append parsed content
+                container.innerHTML = '';
+                while (template.content.firstChild) {
+                    container.appendChild(template.content.firstChild);
+                }
 
                 if (window.Alpine) {
                     container.querySelectorAll('[x-data]').forEach(function(el) {

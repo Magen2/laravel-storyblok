@@ -17,6 +17,7 @@ class PreviewController
     {
         $storyData = $request->input('story');
 
+
         // Validate this is a legitimate preview request by checking:
         // 1. Story data contains _editable (only present in draft mode from Storyblok)
         // 2. Request comes from Storyblok app (referer check)
@@ -49,6 +50,7 @@ class PreviewController
 
             $renderedBlocks = [];
             foreach ($blocks as $block) {
+
                 $renderedBlocks[] = [
                     'uid' => $block->meta('_uid'),
                     'html' => $block->render()->render(),
